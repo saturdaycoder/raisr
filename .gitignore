@@ -1,4 +1,6 @@
-train/*
+train
+train*
+*.tar
 test/*
 results/*
 __pycache__

@@ -1,7 +1,11 @@
 import numpy as np
 from matplotlib import pyplot as plt
+import pickle
+import sys
+import re
+import os
 
-def filterplot(h, R, Qangle, Qstrength, Qcoherence, patchsize):
+def filterplot(h, R, Qangle, Qstrength, Qcoherence, patchsize, fprecision, outdir):
     for pixeltype in range(0,R*R):
         maxvalue = h[:,:,:,pixeltype].max()
         minvalue = h[:,:,:,pixeltype].min()
@@ -17,4 +21,5 @@ def filterplot(h, R, Qangle, Qstrength, Qcoherence, patchsize):
                     ax.axis('off')
                     plotcounter += 1
         plt.axis('off')
-        plt.show()
+        #plt.show()
+        plt.savefig(os.path.join(outdir, 'pixtype%d.png'%(pixeltype)), dpi=900)

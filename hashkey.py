@@ -1,59 +1,85 @@
 import numpy as np
 from math import atan2, floor, pi
 
-def hashkey(block, Qangle, W):
-    # Calculate gradient
-    gy, gx = np.gradient(block)
-
+def hashkey(gy, gx, Qangle, W, precision, strSplitter=None, coheSplitter=None):
     # Transform 2D matrix into 1D array
     gx = gx.ravel()
     gy = gy.ravel()
 
     # SVD calculation
     G = np.vstack((gx,gy)).T
-    GTWG = G.T.dot(W).dot(G)
-    w, v = np.linalg.eig(GTWG);
+    GTWG = G.T.dot(W).dot(G).astype(precision)
 
-    # Make sure V and D contain only real numbers
-    nonzerow = np.count_nonzero(np.isreal(w))
-    nonzerov = np.count_nonzero(np.isreal(v))
-    if nonzerow != 0:
-        w = np.real(w)
-    if nonzerov != 0:
-        v = np.real(v)
+    ma = GTWG[0,0]
+    mb = GTWG[0,1]
+    mc = GTWG[1,0]
+    md = GTWG[1,1]
+    T = precision(ma + md)
+    D = precision(ma * md - mb * mc)
+    SQ = precision((T * T)/4 - D)
+    if SQ < 0:
+        if not np.isclose(SQ, 0, atol=1e-04):
+            print('SQ={}'.format(SQ))
+        SQ = 0
+    L1 = precision(T/2 + np.sqrt(SQ))
+    L2 = precision(T/2 - np.sqrt(SQ))
+    if L1 < 0:
+        if not np.isclose(L1, 0, atol=1e-04):
+            print('L1={}'.format(L1))
+        L1 = 0
+    if L2 < 0:
+        if not np.isclose(L2, 0, atol=1e-04):
+            print('L1={}'.format(L2))
+        L2 = 0
 
-    # Sort w and v according to the descending order of w
-    idx = w.argsort()[::-1]
-    w = w[idx]
-    v = v[:,idx]
+    try:
+        theta = precision(atan2(mb, L1 - md))
+    except:
+        print('invalid eigen value:')
+        print(' [{} {} {} {}]'.format(ma, mb, mc, md))
+        print(' L1={}, L2={}'.format(T/2 + np.sqrt(SQ), T/2 - np.sqrt(SQ)))
+        theta = 0.0
 
-    # Calculate theta
-    theta = atan2(v[1,0], v[0,0])
     if theta < 0:
-        theta = theta + pi
+        theta += pi
 
-    # Calculate lamda
-    lamda = w[0]
-
-    # Calculate u
-    sqrtlamda1 = np.sqrt(w[0])
-    sqrtlamda2 = np.sqrt(w[1])
+    lamda = precision(L1)
+    try:
+        sqrtlamda1 = np.sqrt(L1)
+        sqrtlamda2 = np.sqrt(L2)
+    except:
+        print('L1={}, L2={}'.format(L1, L2))
+        sqrtlamda1 = sqrtlamda2 = 0.0
     if sqrtlamda1 + sqrtlamda2 == 0:
-        u = 0
+        u = precision(0.0)
     else:
-        u = (sqrtlamda1 - sqrtlamda2)/(sqrtlamda1 + sqrtlamda2)
+        u = precision((sqrtlamda1 - sqrtlamda2)/(sqrtlamda1 + sqrtlamda2))
 
     # Quantize
     angle = floor(theta/pi*Qangle)
-    if lamda < 0.0001:
+
+    if strSplitter != None and len(strSplitter) == 2:
+        str1 = strSplitter[0]
+        str2 = strSplitter[1]
+    else:
+        str1 = 0.0001
+        str2 = 0.001
+    if lamda < str1:
         strength = 0
-    elif lamda > 0.001:
+    elif lamda > str2:
         strength = 2
     else:
         strength = 1
-    if u < 0.25:
+
+    if coheSplitter != None and len(coheSplitter) == 2:
+        cohe1 = coheSplitter[0]
+        cohe2 = coheSplitter[1]
+    else:
+        cohe1 = 0.25
+        cohe2 = 0.5
+    if u < cohe1:
         coherence = 0
-    elif u > 0.5:
+    elif u > cohe2:
         coherence = 2
     else:
         coherence = 1
@@ -64,4 +90,4 @@ def hashkey(block, Qangle, W):
     elif angle < 0:
         angle = 0
 
-    return angle, strength, coherence
+    return angle, strength, coherence, theta, lamda, u
